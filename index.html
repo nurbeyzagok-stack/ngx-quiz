@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Storage Resilience Audit | NGX Storage</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --red: #ee3c43;
+      --black: #111111;
+      --dark: #1b1b1b;
+      --white: #ffffff;
+      --grey-bg: #f5f5f5;
+      --grey-border: #ececec;
+      --grey-text: #666666;
+      --font: 'Inter', sans-serif;
+    }
+
+    body {
+      background-color: #efefef;
+      font-family: var(--font);
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 40px 16px;
+    }
+
+    .card {
+      background: var(--white);
+      border-radius: 18px;
+      width: 100%;
+      max-width: 620px;
+      overflow: hidden;
+      box-shadow: 0 4px 40px rgba(0,0,0,0.10);
+    }
+
+    /* Header */
+    .card-header {
+      background: var(--black);
+      padding: 36px 48px 32px;
+      text-align: center;
+    }
+    .card-header img { width: 88px; margin-bottom: 22px; display: block; margin-left: auto; margin-right: auto; }
+    .badge {
+      display: inline-block;
+      background: rgba(238,60,67,0.14);
+      border: 1px solid rgba(238,60,67,0.45);
+      color: var(--red);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 2.2px;
+      text-transform: uppercase;
+      padding: 5px 14px;
+      border-radius: 2px;
+      margin-bottom: 18px;
+    }
+    .card-header h1 {
+      color: var(--white);
+      font-size: 26px;
+      font-weight: 700;
+      line-height: 1.25;
+      margin-bottom: 10px;
+      letter-spacing: -0.3px;
+    }
+    .card-header p {
+      color: #999;
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    /* Red bar */
+    .red-bar { height: 4px; background: var(--red); }
+
+    /* Progress */
+    .progress-wrap {
+      padding: 20px 48px 0;
+    }
+    .progress-track {
+      height: 4px;
+      background: var(--grey-border);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--red);
+      border-radius: 99px;
+      transition: width 0.4s cubic-bezier(.4,0,.2,1);
+      width: 0%;
+    }
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 8px;
+      font-size: 12px;
+      color: #aaa;
+      font-weight: 500;
+    }
+
+    /* Questions */
+    .questions-wrap { padding: 0; }
+
+    .question {
+      display: none;
+      padding: 32px 48px 36px;
+      animation: fadeIn 0.3s ease;
+    }
+    .question.active { display: block; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .q-number {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--red);
+      margin-bottom: 12px;
+    }
+    .q-text {
+      font-size: 17px;
+      color: var(--dark);
+      line-height: 1.65;
+      margin-bottom: 28px;
+      font-weight: 400;
+    }
+    .q-text strong { font-weight: 700; }
+
+    .btn-group {
+      display: flex;
+      gap: 12px;
+    }
+
+    .qz-btn {
+      display: inline-block;
+      padding: 10px 32px;
+      border-radius: 4px;
+      font-family: var(--font);
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.4px;
+      cursor: pointer;
+      border: 1.5px solid var(--grey-border);
+      background: var(--white);
+      color: #888;
+      transition: all 0.18s ease;
+      outline: none;
+      user-select: none;
+    }
+    .qz-btn:hover {
+      border-color: #bbb;
+      background: #fafafa;
+      color: #555;
+    }
+    .qz-btn.yes-active {
+      background: var(--dark);
+      border-color: var(--dark);
+      color: var(--white);
+    }
+    .qz-btn.no-active {
+      background: var(--red);
+      border-color: var(--red);
+      color: var(--white);
+    }
+    .qz-btn.dimmed { opacity: 0.35; }
+
+    /* Result */
+    .result-wrap {
+      display: none;
+      padding: 36px 48px 40px;
+      animation: fadeIn 0.35s ease;
+    }
+    .result-wrap.visible { display: block; }
+
+    .result-score-row {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      margin-bottom: 28px;
+    }
+    .score-badge {
+      flex-shrink: 0;
+      width: 64px;
+      height: 64px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--white);
+      line-height: 1;
+    }
+    .score-badge.green  { background: var(--dark); }
+    .score-badge.orange { background: #d97706; }
+    .score-badge.red    { background: var(--red); }
+
+    .result-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--dark);
+      margin-bottom: 6px;
+      letter-spacing: -0.2px;
+    }
+    .result-sub {
+      font-size: 14px;
+      color: var(--grey-text);
+      line-height: 1.7;
+    }
+
+    .result-detail {
+      background: var(--grey-bg);
+      border-radius: 10px;
+      padding: 20px 22px;
+      margin-bottom: 24px;
+    }
+    .result-detail p {
+      font-size: 14px;
+      color: #555;
+      line-height: 1.75;
+    }
+
+    .answers-summary {
+      margin-bottom: 24px;
+    }
+    .answers-summary-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #aaa;
+      margin-bottom: 12px;
+    }
+    .answer-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--grey-border);
+      font-size: 13px;
+      color: #555;
+      line-height: 1.55;
+    }
+    .answer-row:last-child { border-bottom: none; }
+    .answer-dot {
+      flex-shrink: 0;
+      margin-top: 3px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      font-weight: 800;
+      color: var(--white);
+    }
+    .answer-dot.yes { background: var(--dark); }
+    .answer-dot.no  { background: var(--red); }
+
+    .cta-btn {
+      display: block;
+      width: 100%;
+      padding: 14px;
+      background: var(--red);
+      color: var(--white);
+      font-family: var(--font);
+      font-size: 15px;
+      font-weight: 700;
+      text-align: center;
+      text-decoration: none;
+      border-radius: 6px;
+      letter-spacing: 0.3px;
+      transition: background 0.18s;
+    }
+    .cta-btn:hover { background: #d42d34; }
+
+    .retry-btn {
+      display: block;
+      width: 100%;
+      margin-top: 12px;
+      padding: 11px;
+      background: transparent;
+      border: 1.5px solid var(--grey-border);
+      border-radius: 6px;
+      color: #999;
+      font-family: var(--font);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.18s;
+    }
+    .retry-btn:hover { border-color: #bbb; color: #666; }
+
+    /* Footer */
+    .card-footer {
+      background: var(--black);
+      padding: 28px 48px;
+      text-align: center;
+    }
+    .card-footer img { width: 72px; margin-bottom: 14px; opacity: 0.85; }
+    .card-footer p { color: #555; font-size: 12px; line-height: 1.7; }
+
+    @media (max-width: 520px) {
+      .card-header, .progress-wrap, .question, .result-wrap, .card-footer {
+        padding-left: 24px;
+        padding-right: 24px;
+      }
+      .card-header h1 { font-size: 22px; }
+      .q-text { font-size: 15px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="card">
+
+  <!-- Header -->
+  <div class="card-header">
+    <img src="https://4a5b3ab47b.imgdist.com/pub/bfra/impld677/aa9/o00/iqr/ngx_h.png" alt="NGX Storage">
+    <div class="badge">2-Minute Audit</div>
+    <h1>Storage Resilience Check</h1>
+    <p>Answer 5 honest questions.<br>See where your infrastructure actually stands.</p>
+  </div>
+  <div class="red-bar"></div>
+
+  <!-- Progress -->
+  <div class="progress-wrap" id="progress-section">
+    <div class="progress-track">
+      <div class="progress-fill" id="progress-fill"></div>
+    </div>
+    <div class="progress-label">
+      <span id="progress-text">Question 1 of 5</span>
+      <span id="progress-pct">0%</span>
+    </div>
+  </div>
+
+  <!-- Questions -->
+  <div class="questions-wrap">
+
+    <div class="question active" id="q1">
+      <div class="q-number">Question 1 of 5</div>
+      <p class="q-text">Can your storage <strong>guarantee deterministic latency</strong> under peak load — not optimize for, but <em>guarantee</em>?</p>
+      <div class="btn-group">
+        <button class="qz-btn" onclick="answer(1,'yes',this)">Yes</button>
+        <button class="qz-btn" onclick="answer(1,'no',this)">No</button>
+      </div>
+    </div>
+
+    <div class="question" id="q2">
+      <div class="q-number">Question 2 of 5</div>
+      <p class="q-text">When data volumes spike unexpectedly, does your <strong>performance stay predictable</strong> rather than degrade?</p>
+      <div class="btn-group">
+        <button class="qz-btn" onclick="answer(2,'yes',this)">Yes</button>
+        <button class="qz-btn" onclick="answer(2,'no',this)">No</button>
+      </div>
+    </div>
+
+    <div class="question" id="q3">
+      <div class="q-number">Question 3 of 5</div>
+      <p class="q-text">Can firmware and system <strong>updates be applied without a maintenance window</strong>?</p>
+      <div class="btn-group">
+        <button class="qz-btn" onclick="answer(3,'yes',this)">Yes</button>
+        <button class="qz-btn" onclick="answer(3,'no',this)">No</button>
+      </div>
+    </div>
+
+    <div class="question" id="q4">
+      <div class="q-number">Question 4 of 5</div>
+      <p class="q-text">Is your storage architecture <strong>free from single-vendor lock-in</strong>?</p>
+      <div class="btn-group">
+        <button class="qz-btn" onclick="answer(4,'yes',this)">Yes</button>
+        <button class="qz-btn" onclick="answer(4,'no',this)">No</button>
+      </div>
+    </div>
+
+    <div class="question" id="q5">
+      <div class="q-number">Question 5 of 5</div>
+      <p class="q-text">Is your <strong>disaster recovery tested</strong> under real production conditions — not just documented?</p>
+      <div class="btn-group">
+        <button class="qz-btn" onclick="answer(5,'yes',this)">Yes</button>
+        <button class="qz-btn" onclick="answer(5,'no',this)">No</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Result -->
+  <div class="result-wrap" id="result-wrap">
+
+    <div class="result-score-row">
+      <div class="score-badge" id="result-badge"></div>
+      <div>
+        <div class="result-title" id="result-title"></div>
+        <div class="result-sub" id="result-sub"></div>
+      </div>
+    </div>
+
+    <div class="result-detail">
+      <p id="result-detail"></p>
+    </div>
+
+    <div class="answers-summary">
+      <div class="answers-summary-title">Your answers</div>
+      <div id="answers-list"></div>
+    </div>
+
+    <a href="https://www.ngxstorage.com/contact/" target="_blank" class="cta-btn">Talk to our team &rarr;</a>
+    <button class="retry-btn" onclick="restart()">Take the quiz again</button>
+
+  </div>
+
+  <!-- Footer -->
+  <div class="card-footer">
+    <img src="https://4a5b3ab47b.imgdist.com/pub/bfra/impld677/aa9/o00/iqr/ngx_h.png" alt="NGX Storage">
+    <p>Copyright &copy; 2026 NGX Storage. All rights reserved.</p>
+  </div>
+
+</div>
+
+<script>
+  var answers = {};
+  var current = 1;
+  var total = 5;
+
+  var qTexts = [
+    "Deterministic latency under peak load",
+    "Predictable performance during volume spikes",
+    "Updates without maintenance windows",
+    "Free from single-vendor lock-in",
+    "Disaster recovery tested in production"
+  ];
+
+  function answer(qNum, val, btn) {
+    answers[qNum] = val;
+
+    // Style buttons
+    var btns = btn.parentElement.querySelectorAll('.qz-btn');
+    btns[0].className = 'qz-btn' + (val === 'yes' ? ' yes-active' : ' dimmed');
+    btns[1].className = 'qz-btn' + (val === 'no'  ? ' no-active'  : ' dimmed');
+
+    // Wait a moment then advance
+    setTimeout(function() {
+      if (qNum < total) {
+        document.getElementById('q' + qNum).classList.remove('active');
+        current = qNum + 1;
+        document.getElementById('q' + current).classList.add('active');
+        updateProgress(current);
+      } else {
+        showResult();
+      }
+    }, 380);
+  }
+
+  function updateProgress(step) {
+    var pct = Math.round(((step - 1) / total) * 100);
+    document.getElementById('progress-fill').style.width = pct + '%';
+    document.getElementById('progress-text').textContent = 'Question ' + step + ' of ' + total;
+    document.getElementById('progress-pct').textContent = pct + '%';
+  }
+
+  function showResult() {
+    // Hide questions & progress
+    document.getElementById('progress-section').style.display = 'none';
+    document.querySelector('.questions-wrap').style.display = 'none';
+
+    var score = 0;
+    for (var i = 1; i <= total; i++) {
+      if (answers[i] === 'yes') score++;
+    }
+
+    var badge = document.getElementById('result-badge');
+    var title = document.getElementById('result-title');
+    var sub   = document.getElementById('result-sub');
+    var detail = document.getElementById('result-detail');
+
+    badge.textContent = score + '/' + total;
+
+    if (score === 5) {
+      badge.className = 'score-badge green';
+      title.textContent = 'Strong foundation.';
+      sub.textContent = 'Your infrastructure is in solid shape.';
+      detail.textContent = 'You\'re ahead of most organisations. The market is moving fast — keep pressure-testing your assumptions and stay close to how your vendors are evolving.';
+    } else if (score >= 3) {
+      badge.className = 'score-badge orange';
+      title.textContent = 'Working foundation, real exposure.';
+      sub.textContent = score + ' out of 5 — gaps worth closing.';
+      detail.textContent = 'The areas you answered No on may feel manageable today, but they have a way of becoming the incidents that define your quarter. Let\'s close them before they surface.';
+    } else if (score >= 1) {
+      badge.className = 'score-badge red';
+      title.textContent = 'Significant risk.';
+      sub.textContent = score + ' out of 5 — your infrastructure needs attention.';
+      detail.textContent = 'Your storage is carrying more pressure than your business realises. It\'s fixable — but it needs a clear look now, not after the next incident.';
+    } else {
+      badge.className = 'score-badge red';
+      title.textContent = 'It\'s time for a conversation.';
+      sub.textContent = '0 out of 5 — act before the infrastructure does.';
+      detail.textContent = 'You\'re not alone, but you do need to move. Our team can help you understand where the exposure is and what a realistic path forward looks like.';
+    }
+
+    // Build answers summary
+    var list = document.getElementById('answers-list');
+    list.innerHTML = '';
+    for (var j = 1; j <= total; j++) {
+      var val = answers[j];
+      var row = document.createElement('div');
+      row.className = 'answer-row';
+      row.innerHTML =
+        '<div class="answer-dot ' + val + '">' + (val === 'yes' ? '✓' : '✕') + '</div>' +
+        '<span>' + qTexts[j-1] + '</span>';
+      list.appendChild(row);
+    }
+
+    document.getElementById('result-wrap').classList.add('visible');
+  }
+
+  function restart() {
+    answers = {};
+    current = 1;
+
+    // Reset all questions
+    for (var i = 1; i <= total; i++) {
+      var q = document.getElementById('q' + i);
+      q.classList.remove('active');
+      q.querySelectorAll('.qz-btn').forEach(function(b) { b.className = 'qz-btn'; });
+    }
+    document.getElementById('q1').classList.add('active');
+
+    // Reset progress
+    document.getElementById('progress-fill').style.width = '0%';
+    document.getElementById('progress-text').textContent = 'Question 1 of 5';
+    document.getElementById('progress-pct').textContent = '0%';
+
+    // Show questions
+    document.getElementById('progress-section').style.display = 'block';
+    document.querySelector('.questions-wrap').style.display = 'block';
+    document.getElementById('result-wrap').classList.remove('visible');
+  }
+</script>
+
+</body>
+</html>
